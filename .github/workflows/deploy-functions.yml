@@ -44,6 +44,9 @@ jobs:
           zip -r ../../functionapp.zip .
           cd ../..
           unzip -l functionapp.zip | head -n 50
+          echo "---- REQUIRED FILES ----"
+          unzip -l functionapp.zip | egrep "host.json$|function_app.py$|requirements.txt$" || true
+
 
       - name: Deploy to Azure Functions
         uses: Azure/functions-action@v1
