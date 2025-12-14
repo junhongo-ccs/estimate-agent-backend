@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import logging
 import azure.functions as func
 import google.generativeai as genai
 
@@ -66,13 +67,17 @@ def _extract_json(text: str) -> dict:
 
 def _call_gemini(system: str, user_json: dict) -> dict:
     key = os.getenv("GEMINI_API_KEY")
-    model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+    desired_model = os.getenv("GEMINI_MODEL")
+    # フォールバック（将来切替用ログ）
+    if not desired_model:
+        desired_model = "gemini-2.5-flash"
+        logging.info("model_fallback: GEMINI_MODEL not set -> using gemini-2.5-flash")
     if not key:
         raise RuntimeError("GEMINI_API_KEY not set")
 
     genai.configure(api_key=key)
     model = genai.GenerativeModel(
-        model_name,
+        desired_model,
         system_instruction=system
     )
     resp = model.generate_content(
@@ -108,6 +113,32 @@ def enhance_estimate(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse(
             json.dumps({"status": "error", "message": "core_result.estimated_amount is required"}),
             status_code=400,
+            mimetype="application/json",
+            headers=_cors_headers(),
+        )
+
+    # 入力不足判定（低コストガード）
+    summary = (payload.get("summary") or "").strip()
+    scope = (payload.get("scope") or "").strip()
+    if not summary or not scope:
+        mult = 1.0
+        adjusted_amount = int(estimated_amount * mult)
+        body = {
+            "status": "ok",
+            "adjustment": {
+                "multiplier": 1.0,
+                "amount_delta": adjusted_amount - estimated_amount,
+                "adjusted_amount": adjusted_amount,
+                "reasons": ["入力情報が不足しているため、乗数は1.00に固定しました。"],
+            },
+            "rationale_md": "入力不足により係数調整は行いません。必要情報（要約・範囲）をご提供ください。",
+            "added_warnings": ["summary または scope が未入力です"],
+            "disclaimer": "本結果は入力内容に基づく補助的な提案です。",
+            "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
+        }
+        return func.HttpResponse(
+            json.dumps(body, ensure_ascii=False),
+            status_code=200,
             mimetype="application/json",
             headers=_cors_headers(),
         )
