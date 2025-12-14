@@ -65,6 +65,14 @@ def _extract_json(text: str) -> dict:
     return json.loads(m.group(0))
 
 
+def _looks_english(s: str) -> bool:
+    if not s:
+        return False
+    letters = sum(c.isalpha() for c in s)
+    ascii_letters = sum("a" <= c.lower() <= "z" for c in s)
+    return letters > 0 and (ascii_letters / letters) > 0.8
+
+
 def _call_gemini(system: str, user_json: dict) -> dict:
     key = os.getenv("GEMINI_API_KEY")
     desired_model = os.getenv("GEMINI_MODEL")
@@ -144,18 +152,30 @@ def enhance_estimate(req: func.HttpRequest) -> func.HttpResponse:
         )
 
     system = (
-        "Return ONLY valid JSON.\n"
-        "Suggest multiplier (1.00-1.30). If insufficient info, 1.00.\n"
-        "Schema:{"
-        "\"multiplier_suggestion\":number,"
-        "\"reasons\":string[],"
-        "\"rationale_md\":string,"
-        "\"added_warnings\":string[]}"
+        "あなたは見積支援のアシスタントです。出力は必ず日本語で返してください。\n"
+        "返答は『有効なJSONのみ』。JSON以外の文字は一切出力しないでください。\n\n"
+        "制約:\n"
+        "- multiplier_suggestion は 1.00〜1.30 の範囲。\n"
+        "- 情報が不十分なら multiplier_suggestion は 1.00。\n"
+        "- reasons は短い日本語の箇条書き（配列）。\n"
+        "- rationale_md は日本語Markdownで、ビジネス向けに簡潔に。\n"
+        "- added_warnings は任意（日本語）。\n\n"
+        "出力スキーマ:\n"
+        "{\n  \"multiplier_suggestion\": number,\n  \"reasons\": string[],\n  \"rationale_md\": string,\n  \"added_warnings\": string[]\n}"
     )
 
     try:
         out = _call_gemini(system, payload)
         mult = _clamp(float(out.get("multiplier_suggestion", 1.0)), 1.0, 1.3)
+        rationale_md = out.get("rationale_md") or ""
+        # 英語率が高い場合は安全策で 1.00 に落としてテンプレに差し替え
+        if _looks_english(rationale_md):
+            mult = 1.0
+            rationale_md = (
+                "本提案は日本語での要約が不足しているため、安全係数の調整を行っていません。\n\n"
+                "- 入力情報を日本語で明確化してください（要約・範囲・重要前提）。\n"
+                "- 必要情報提供後に再評価し、係数調整を実施します。"
+            )
         adjusted_amount = int(estimated_amount * mult)
 
         body = {
@@ -166,7 +186,7 @@ def enhance_estimate(req: func.HttpRequest) -> func.HttpResponse:
                 "adjusted_amount": adjusted_amount,
                 "reasons": out.get("reasons") or []
             },
-            "rationale_md": out.get("rationale_md") or "",
+            "rationale_md": rationale_md,
             "added_warnings": out.get("added_warnings") or [],
             "disclaimer": "本結果は入力内容に基づく補助的な提案です。",
             "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
