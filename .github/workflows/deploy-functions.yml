@@ -29,18 +29,9 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
 
-      - name: Install dependencies into .python_packages
-      - name: Build deployment zip
-        run: |
-          rm -f functionapp.zip
-          cd functions/estimate-api
-          zip -r ../../functionapp.zip .
-          cd ../..
-          unzip -l functionapp.zip | head -n 40
-
-
+      - name: Install dependencies
         working-directory: functions/estimate-api
         run: |
           python -m pip install --upgrade pip
@@ -52,11 +43,10 @@ jobs:
           cd functions/estimate-api
           zip -r ../../functionapp.zip .
           cd ../..
-          unzip -l functionapp.zip | head -n 40
+          unzip -l functionapp.zip | head -n 50
 
       - name: Deploy to Azure Functions
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
           package: functionapp.zip
-
