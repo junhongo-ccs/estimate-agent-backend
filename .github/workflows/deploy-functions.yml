@@ -32,6 +32,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies into .python_packages
+      - name: Build deployment zip
+        run: |
+          rm -f functionapp.zip
+          cd functions/estimate-api
+          zip -r ../../functionapp.zip .
+          cd ../..
+          unzip -l functionapp.zip | head -n 40
+
+
         working-directory: functions/estimate-api
         run: |
           python -m pip install --upgrade pip
@@ -50,3 +59,4 @@ jobs:
         with:
           app-name: ${{ secrets.AZURE_FUNCTIONAPP_NAME }}
           package: functionapp.zip
+
