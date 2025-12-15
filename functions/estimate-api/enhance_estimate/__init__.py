@@ -1,6 +1,7 @@
 import json
 import os
 import re
+
 import azure.functions as func
 
 # OpenAI SDK v1
@@ -97,10 +98,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         "- added_warnings is optional.\n"
         "Output schema:\n"
         "{"
-        "\"multiplier_suggestion\": number,"
-        "\"reasons\": string[],"
-        "\"rationale_md\": string,"
-        "\"added_warnings\": string[]"
+        '"multiplier_suggestion": number,'
+        '"reasons": string[],'
+        '"rationale_md": string,'
+        '"added_warnings": string[]'
         "}"
     )
 
@@ -164,7 +165,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         return func.HttpResponse(
-            json.dumps({"status": "error", "message": f"LLM call failed: {str(e)}"}, ensure_ascii=False),
+            json.dumps(
+                {"status": "error", "message": f"LLM call failed: {str(e)}"}, ensure_ascii=False
+            ),
             status_code=502,
             mimetype="application/json",
             headers=_cors_headers(),

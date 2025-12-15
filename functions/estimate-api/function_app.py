@@ -1,11 +1,13 @@
 import json
+import logging
 import os
 import re
-import logging
+
 import azure.functions as func
 import google.generativeai as genai
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.ANONYMOUS)
+
 
 @app.route(route="calculate_estimate", methods=["POST"])
 def calculate_estimate(req: func.HttpRequest) -> func.HttpResponse:
@@ -20,19 +22,15 @@ def calculate_estimate(req: func.HttpRequest) -> func.HttpResponse:
         person_days = round(screen_count * 1.5 * m, 1)
 
         return func.HttpResponse(
-            json.dumps({
-                "screen_count": screen_count,
-                "complexity": complexity,
-                "person_days": person_days
-            }),
+            json.dumps(
+                {"screen_count": screen_count, "complexity": complexity, "person_days": person_days}
+            ),
             mimetype="application/json",
-            status_code=200
+            status_code=200,
         )
     except Exception as e:
         return func.HttpResponse(
-            json.dumps({"error": str(e)}),
-            mimetype="application/json",
-            status_code=400
+            json.dumps({"error": str(e)}), mimetype="application/json", status_code=400
         )
 
 
@@ -84,16 +82,10 @@ def _call_gemini(system: str, user_json: dict) -> dict:
         raise RuntimeError("GEMINI_API_KEY not set")
 
     genai.configure(api_key=key)
-    model = genai.GenerativeModel(
-        desired_model,
-        system_instruction=system
-    )
+    model = genai.GenerativeModel(desired_model, system_instruction=system)
     resp = model.generate_content(
         json.dumps(user_json, ensure_ascii=False),
-        generation_config={
-            "temperature": 0.2,
-            "response_mime_type": "application/json"
-        }
+        generation_config={"temperature": 0.2, "response_mime_type": "application/json"},
     )
     return _extract_json(resp.text)
 
@@ -161,7 +153,7 @@ def enhance_estimate(req: func.HttpRequest) -> func.HttpResponse:
         "- rationale_md は日本語Markdownで、ビジネス向けに簡潔に。\n"
         "- added_warnings は任意（日本語）。\n\n"
         "出力スキーマ:\n"
-        "{\n  \"multiplier_suggestion\": number,\n  \"reasons\": string[],\n  \"rationale_md\": string,\n  \"added_warnings\": string[]\n}"
+        '{\n  "multiplier_suggestion": number,\n  "reasons": string[],\n  "rationale_md": string,\n  "added_warnings": string[]\n}'
     )
 
     try:
@@ -184,12 +176,12 @@ def enhance_estimate(req: func.HttpRequest) -> func.HttpResponse:
                 "multiplier": round(mult, 2),
                 "amount_delta": adjusted_amount - estimated_amount,
                 "adjusted_amount": adjusted_amount,
-                "reasons": out.get("reasons") or []
+                "reasons": out.get("reasons") or [],
             },
             "rationale_md": rationale_md,
             "added_warnings": out.get("added_warnings") or [],
             "disclaimer": "本結果は入力内容に基づく補助的な提案です。",
-            "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+            "model": os.getenv("GEMINI_MODEL", "gemini-2.5-flash"),
         }
 
         return func.HttpResponse(
@@ -201,9 +193,10 @@ def enhance_estimate(req: func.HttpRequest) -> func.HttpResponse:
 
     except Exception as e:
         return func.HttpResponse(
-            json.dumps({"status": "error", "message": f"LLM call failed: {str(e)}"}, ensure_ascii=False),
+            json.dumps(
+                {"status": "error", "message": f"LLM call failed: {str(e)}"}, ensure_ascii=False
+            ),
             status_code=502,
             mimetype="application/json",
             headers=_cors_headers(),
         )
-
